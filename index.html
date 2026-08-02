@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no"
+    />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="theme-color" content="#87d6ef" />
+    <title>Eye Found It Spinner</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Fredoka:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="atmosphere" aria-hidden="true"></div>
+
+    <main class="app">
+      <header class="brand">
+        <p class="brand-mark">Eye Found It</p>
+        <h1 class="headline">Spin to search</h1>
+      </header>
+
+      <section class="spinner-stage" aria-label="Game spinner">
+        <div class="pointer" aria-hidden="true">
+          <svg viewBox="0 0 40 56" class="pointer-svg">
+            <path
+              d="M20 4 L34 28 A14 14 0 1 1 6 28 Z"
+              fill="#1a1a1a"
+            />
+            <circle cx="20" cy="30" r="5" fill="#f7f3e8" />
+          </svg>
+        </div>
+
+        <div class="wheel-shell">
+          <div class="wheel" id="wheel" role="img" aria-label="Spinner wheel with twelve segments">
+            <div class="wheel-face"></div>
+            <div class="labels" id="labels"></div>
+            <div class="hub" aria-hidden="true"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="controls">
+        <p class="result" id="result" aria-live="polite">Tap spin</p>
+        <button type="button" class="spin-btn" id="spinBtn">Spin</button>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
