@@ -2,7 +2,27 @@
 
 A simple browser spinner for **Disney Eye Found It!** when the physical spinner is missing.
 
-No install, no compile — open the page in Safari on your iPhone.
+Open it in Safari — no install, no compile, no local server.
+
+## Use on your iPhone (GitHub Pages)
+
+After this is on `main`, do this **once** in GitHub:
+
+1. **Make the repo public** (needed for free GitHub Pages)  
+   Repo → **Settings** → scroll to **Danger Zone** → **Change visibility** → Public  
+   Direct link: https://github.com/AlexanderDKB/EyeFoundItSpinner/settings
+
+2. **Turn on Pages**  
+   Repo → **Settings** → **Pages**  
+   - Source: **Deploy from a branch**  
+   - Branch: **main** / **/ (root)** → **Save**  
+   Direct link: https://github.com/AlexanderDKB/EyeFoundItSpinner/settings/pages
+
+3. Wait about a minute, then open:
+
+   **https://alexanderdkb.github.io/EyeFoundItSpinner/**
+
+   On iPhone Safari: Share → **Add to Home Screen** if you want an app-like icon.
 
 ## Spinner layout (clockwise from 12)
 
@@ -18,32 +38,6 @@ No install, no compile — open the page in Safari on your iPhone.
 10. Mickey search
 11. **1**
 12. **2**
-
-## Run on iPhone (same Wi‑Fi)
-
-On your computer, from this folder:
-
-```bash
-python3 -m http.server 8000
-```
-
-Then on your iPhone, open Safari and go to:
-
-```text
-http://YOUR_COMPUTER_LAN_IP:8000
-```
-
-Find your computer’s LAN IP:
-
-- **macOS:** System Settings → Network → Wi‑Fi → Details
-- **Windows:** `ipconfig` (look for IPv4 Address)
-- **Linux:** `hostname -I`
-
-Optional: in Safari, tap Share → **Add to Home Screen** for a full-screen shortcut.
-
-## Run without a server
-
-If you keep everything as local files, you can also AirDrop `index.html`, `style.css`, and `app.js` together and open `index.html` in Safari. Using the local server above is more reliable.
 
 ## Files
 
