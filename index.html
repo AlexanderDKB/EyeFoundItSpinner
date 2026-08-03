@@ -22,7 +22,7 @@
     <script>
       (() => {
         // Bump this and version.json together on each deploy.
-        const PAGE_VERSION = "2026-08-03-sounds";
+        const PAGE_VERSION = "2026-08-03-audiofix";
 
         const loadAssets = (version) => {
           const css = document.createElement("link");
@@ -125,6 +125,9 @@
       <section class="controls">
         <p class="result" id="result" aria-live="polite">Flick the needle or tap spin</p>
         <button type="button" class="spin-btn" id="spinBtn">Spin</button>
+        <button type="button" class="voice-btn" id="voiceBtn" aria-label="Change Mickey voice">
+          Voice: Default
+        </button>
       </section>
     </main>
   </body>
