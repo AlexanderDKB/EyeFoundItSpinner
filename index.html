@@ -6,6 +6,9 @@
       name="viewport"
       content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no"
     />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="theme-color" content="#87d6ef" />
@@ -16,7 +19,66 @@
       href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Fredoka:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="style.css" />
+    <script>
+      (() => {
+        // Bump this and version.json together on each deploy.
+        const PAGE_VERSION = "2026-08-03-spinfeel";
+
+        const loadAssets = (version) => {
+          const css = document.createElement("link");
+          css.rel = "stylesheet";
+          css.href = "style.css?v=" + encodeURIComponent(version);
+          document.head.appendChild(css);
+
+          const script = document.createElement("script");
+          script.src = "app.js?v=" + encodeURIComponent(version);
+          script.defer = true;
+          document.head.appendChild(script);
+        };
+
+        const refreshTo = (version) => {
+          const url = new URL(location.href);
+          url.searchParams.set("v", version);
+          location.replace(url.toString());
+        };
+
+        const checkForUpdate = async ({ allowRedirect }) => {
+          let remote = PAGE_VERSION;
+          try {
+            const res = await fetch("version.json?ts=" + Date.now(), {
+              cache: "no-store",
+            });
+            if (res.ok) {
+              const data = await res.json();
+              if (data && data.version) remote = String(data.version);
+            }
+          } catch (_) {
+            /* stay on embedded version */
+          }
+
+          const params = new URLSearchParams(location.search);
+          if (
+            allowRedirect &&
+            remote !== PAGE_VERSION &&
+            params.get("v") !== remote
+          ) {
+            refreshTo(remote);
+            return null;
+          }
+
+          return remote;
+        };
+
+        checkForUpdate({ allowRedirect: true }).then((version) => {
+          if (version) loadAssets(version);
+        });
+
+        document.addEventListener("visibilitychange", () => {
+          if (document.visibilityState !== "visible") return;
+          checkForUpdate({ allowRedirect: true });
+        });
+      })();
+    </script>
   </head>
   <body>
     <div class="atmosphere" aria-hidden="true"></div>
@@ -45,13 +107,13 @@
 
         <div class="needle" id="needle" aria-hidden="true">
           <div class="needle-arm">
-            <svg class="needle-svg" viewBox="0 0 48 240">
+            <svg class="needle-svg" viewBox="0 0 48 340">
               <path
-                d="M24 6 L36 70 L30 70 L30 150 L38 150 L24 188 L10 150 L18 150 L18 70 L12 70 Z"
+                d="M24 4 L38 78 L31 78 L31 210 L40 210 L24 268 L8 210 L17 210 L17 78 L10 78 Z"
                 fill="#1a1a1a"
               />
-              <circle cx="24" cy="120" r="11" fill="#f7f3e8" />
-              <circle cx="24" cy="120" r="5" fill="#1a1a1a" />
+              <circle cx="24" cy="170" r="12" fill="#f7f3e8" />
+              <circle cx="24" cy="170" r="5.5" fill="#1a1a1a" />
             </svg>
           </div>
         </div>
@@ -64,7 +126,5 @@
         <button type="button" class="spin-btn" id="spinBtn">Spin</button>
       </section>
     </main>
-
-    <script src="app.js"></script>
   </body>
 </html>
