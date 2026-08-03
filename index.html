@@ -22,7 +22,7 @@
     <script>
       (() => {
         // Bump this and version.json together on each deploy.
-        const PAGE_VERSION = "2026-08-03-iosbg";
+        const PAGE_VERSION = "2026-08-03-highlight";
 
         const loadAssets = (version) => {
           const css = document.createElement("link");
@@ -100,7 +100,8 @@
             role="img"
             aria-label="Spinner wheel with twelve segments"
           >
-            <div class="wheel-face"></div>
+            <div class="wheel-face" id="wheelFace"></div>
+            <div class="wheel-selection" id="wheelSelection" aria-hidden="true"></div>
             <div class="labels" id="labels"></div>
           </div>
         </div>

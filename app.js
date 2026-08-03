@@ -66,6 +66,8 @@ const MICKEY_SVG = `
 `;
 
 const labelsEl = document.getElementById("labels");
+const wheelEl = document.getElementById("wheel");
+const wheelSelectionEl = document.getElementById("wheelSelection");
 const needleEl = document.getElementById("needle");
 const stageEl = document.getElementById("spinnerStage");
 const spinBtn = document.getElementById("spinBtn");
@@ -79,6 +81,7 @@ let lastTs = 0;
 let lastTickSlot = 0;
 let audioCtx = null;
 let reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+let selectedIndex = null;
 
 let dragPointerId = null;
 let lastDragAngle = 0;
@@ -90,6 +93,7 @@ function buildLabels() {
   SEGMENTS.forEach((segment, index) => {
     const label = document.createElement("div");
     label.className = "label";
+    label.dataset.index = String(index);
     label.style.setProperty("--i", String(index));
 
     if (segment.type === "number") {
@@ -120,16 +124,44 @@ function segmentAt(deg) {
   return Math.floor((normalize(deg) + SEGMENT_DEG / 2) / SEGMENT_DEG) % SEGMENTS.length;
 }
 
-function nearestCenter(deg) {
-  return Math.round(deg / SEGMENT_DEG) * SEGMENT_DEG;
-}
-
 function clampSpeed(speed) {
   return Math.max(-MAX_SPEED, Math.min(MAX_SPEED, speed));
 }
 
 function renderNeedle() {
   needleEl.style.transform = `rotate(${angle}deg)`;
+}
+
+function clearSelection() {
+  selectedIndex = null;
+  wheelEl.classList.remove("has-selection");
+  wheelSelectionEl.style.background = "";
+  labelsEl.querySelectorAll(".label").forEach((label) => {
+    label.classList.remove("is-selected", "is-dimmed");
+  });
+}
+
+function applySelection(index) {
+  selectedIndex = index;
+  wheelEl.classList.add("has-selection");
+
+  const stops = [];
+  for (let i = 0; i < SEGMENTS.length; i += 1) {
+    const start = i * SEGMENT_DEG;
+    const end = start + SEGMENT_DEG;
+    if (i === index) {
+      stops.push(`rgba(255, 255, 255, 0.28) ${start}deg ${end}deg`);
+    } else {
+      stops.push(`rgba(28, 28, 32, 0.48) ${start}deg ${end}deg`);
+    }
+  }
+  wheelSelectionEl.style.background = `conic-gradient(from -15deg, ${stops.join(", ")})`;
+
+  labelsEl.querySelectorAll(".label").forEach((label) => {
+    const i = Number(label.dataset.index);
+    label.classList.toggle("is-selected", i === index);
+    label.classList.toggle("is-dimmed", i !== index);
+  });
 }
 
 function announce(segment) {
@@ -141,6 +173,20 @@ function announce(segment) {
 }
 
 function setButtonLabel(text) {
+  if (text === "Spinning…") {
+    spinBtn.classList.add("is-spinning", "is-busy");
+    spinBtn.innerHTML =
+      '<span class="spin-loader" aria-hidden="true"></span>' +
+      '<span class="spin-btn-text">Spinning</span>';
+    return;
+  }
+
+  spinBtn.classList.remove("is-spinning");
+  if (text === "Spin") {
+    spinBtn.classList.remove("is-busy");
+  } else {
+    spinBtn.classList.add("is-busy");
+  }
   spinBtn.textContent = text;
 }
 
@@ -196,12 +242,13 @@ function emitTicks(fromAngle, toAngle) {
 }
 
 function finishSpin() {
-  angle = nearestCenter(angle);
   velocity = 0;
   mode = "idle";
   lastTickSlot = slotIndex(angle);
   renderNeedle();
-  announce(SEGMENTS[segmentAt(angle)]);
+  const index = segmentAt(angle);
+  applySelection(index);
+  announce(SEGMENTS[index]);
   if (navigator.vibrate) navigator.vibrate(16);
 }
 
@@ -243,10 +290,11 @@ function beginCoast(speed, { additive = false } = {}) {
   velocity = clampSpeed(next);
 
   if (Math.abs(velocity) < 45) {
-    angle = nearestCenter(angle);
     renderNeedle();
     mode = "idle";
-    announce(SEGMENTS[segmentAt(angle)]);
+    const index = segmentAt(angle);
+    applySelection(index);
+    announce(SEGMENTS[index]);
     return;
   }
 
@@ -254,6 +302,7 @@ function beginCoast(speed, { additive = false } = {}) {
     velocity = Math.sign(velocity || SPIN_DIRECTION) * MIN_FLICK_SPEED;
   }
 
+  clearSelection();
   mode = "coasting";
   setButtonLabel("Spinning…");
   startLoop();
@@ -264,12 +313,14 @@ function buttonSpin() {
 
   if (reducedMotion) {
     const index = pickIndex();
-    angle = index * SEGMENT_DEG;
+    angle = index * SEGMENT_DEG + (Math.random() * 20 - 10);
     renderNeedle();
-    announce(SEGMENTS[index]);
+    applySelection(segmentAt(angle));
+    announce(SEGMENTS[segmentAt(angle)]);
     return;
   }
 
+  clearSelection();
   const speed =
     (BUTTON_SPEED_MIN + Math.random() * BUTTON_SPEED_SPAN) * SPIN_DIRECTION;
   // Button always boosts the same direction; stacks if already spinning.
@@ -323,6 +374,7 @@ function onPointerDown(event) {
   // Grabbing always stops the arm so you can wiggle it, then flick.
   velocity = 0;
   stopLoop();
+  clearSelection();
   mode = "dragging";
   setButtonLabel("Flick…");
 
@@ -361,11 +413,12 @@ function onPointerUp(event) {
   dragSamples = [];
 
   if (reducedMotion) {
-    angle = nearestCenter(angle);
     renderNeedle();
     mode = "idle";
     velocity = 0;
-    announce(SEGMENTS[segmentAt(angle)]);
+    const index = segmentAt(angle);
+    applySelection(index);
+    announce(SEGMENTS[index]);
     return;
   }
 
