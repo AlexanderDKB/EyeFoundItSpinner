@@ -179,6 +179,21 @@ body {
   pointer-events: none;
 }
 
+.wheel-selection {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.28s ease;
+  mix-blend-mode: normal;
+  z-index: 1;
+}
+
+.wheel.has-selection .wheel-selection {
+  opacity: 1;
+}
+
 .labels {
   position: absolute;
   inset: 0;
@@ -204,6 +219,18 @@ body {
   font-weight: 800;
   color: #141414;
   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
+  transition: filter 0.28s ease, opacity 0.28s ease;
+}
+
+.label.is-dimmed {
+  filter: grayscale(0.7) brightness(0.72);
+  opacity: 0.48;
+}
+
+.label.is-selected {
+  filter: brightness(1.18) saturate(1.25) drop-shadow(0 0 8px rgba(255, 255, 255, 0.75));
+  opacity: 1;
+  z-index: 5;
 }
 
 .label--clock {
@@ -322,6 +349,10 @@ body {
     0 7px 0 #c78910,
     0 12px 20px rgba(24, 56, 78, 0.28);
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
   transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
 }
 
@@ -335,6 +366,32 @@ body {
 
 .spin-btn.is-busy {
   cursor: default;
+}
+
+.spin-btn.is-spinning {
+  font-size: 0.95rem;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+}
+
+.spin-loader {
+  width: 0.95rem;
+  height: 0.95rem;
+  border-radius: 50%;
+  border: 2.5px solid rgba(42, 34, 8, 0.22);
+  border-top-color: #2a2208;
+  animation: spin-loader 0.65s linear infinite;
+  flex: 0 0 auto;
+}
+
+.spin-btn-text {
+  line-height: 1;
+}
+
+@keyframes spin-loader {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @keyframes rise-in {
@@ -380,5 +437,15 @@ body {
   .controls,
   .result.pop {
     animation: none;
+  }
+
+  .spin-loader {
+    animation: none;
+    border-top-color: rgba(42, 34, 8, 0.45);
+  }
+
+  .label,
+  .wheel-selection {
+    transition: none;
   }
 }
