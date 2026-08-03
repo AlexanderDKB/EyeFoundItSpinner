@@ -6,8 +6,7 @@
   --cream: #fff8ee;
   --hub: #f4efe4;
   --shadow: rgba(18, 52, 74, 0.28);
-  --spin-duration: 4.2s;
-  --wheel-size: min(78vw, 78vh, 420px);
+  --wheel-size: min(96vw, 74dvh, 640px);
   --font-display: "Fredoka", "Baloo 2", sans-serif;
   --font-ui: "Baloo 2", "Fredoka", sans-serif;
 }
@@ -28,9 +27,10 @@ body {
 body {
   color: var(--ink);
   font-family: var(--font-ui);
-  overflow-x: hidden;
+  overflow: hidden;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
+  user-select: none;
 }
 
 .atmosphere {
@@ -80,14 +80,14 @@ body {
 .app {
   min-height: 100dvh;
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   align-items: center;
   justify-items: center;
   padding:
-    max(1rem, env(safe-area-inset-top))
-    1.25rem
-    max(1.25rem, env(safe-area-inset-bottom));
-  gap: 0.75rem;
+    max(0.45rem, env(safe-area-inset-top))
+    0.4rem
+    max(0.75rem, env(safe-area-inset-bottom));
+  gap: 0.35rem;
 }
 
 .brand {
@@ -98,23 +98,14 @@ body {
 .brand-mark {
   margin: 0;
   font-family: var(--font-display);
-  font-size: clamp(2.4rem, 10vw, 3.6rem);
+  font-size: clamp(1.55rem, 6.5vw, 2.2rem);
   font-weight: 700;
   letter-spacing: -0.03em;
-  line-height: 0.95;
+  line-height: 1;
   color: var(--cream);
   text-shadow:
     0 2px 0 rgba(20, 70, 96, 0.18),
-    0 10px 24px rgba(16, 58, 82, 0.22);
-}
-
-.headline {
-  margin: 0.35rem 0 0;
-  font-family: var(--font-ui);
-  font-size: clamp(1rem, 3.8vw, 1.25rem);
-  font-weight: 600;
-  color: rgba(255, 248, 238, 0.92);
-  letter-spacing: 0.02em;
+    0 8px 18px rgba(16, 58, 82, 0.22);
 }
 
 .spinner-stage {
@@ -123,36 +114,28 @@ body {
   height: var(--wheel-size);
   display: grid;
   place-items: center;
+  touch-action: none;
+  cursor: grab;
   animation: rise-in 0.85s ease-out 0.08s both;
 }
 
-.pointer {
-  position: absolute;
-  top: -0.35rem;
-  left: 50%;
-  z-index: 4;
-  width: 2.4rem;
-  transform: translateX(-50%);
-  filter: drop-shadow(0 4px 6px var(--shadow));
-}
-
-.pointer-svg {
-  display: block;
-  width: 100%;
-  height: auto;
+.spinner-stage:active,
+.spinner-stage.is-dragging {
+  cursor: grabbing;
 }
 
 .wheel-shell {
-  width: 100%;
-  height: 100%;
+  width: 92%;
+  height: 92%;
   border-radius: 50%;
-  padding: 0.55rem;
+  padding: 0.45rem;
   background:
     linear-gradient(145deg, rgba(255, 255, 255, 0.75), rgba(255, 255, 255, 0.15)),
     #f3f7fb;
   box-shadow:
     0 18px 40px var(--shadow),
     inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  z-index: 1;
 }
 
 .wheel {
@@ -160,19 +143,13 @@ body {
   width: 100%;
   height: 100%;
   border-radius: 50%;
-  overflow: hidden;
-  transform: rotate(0deg);
-  will-change: transform;
-}
-
-.wheel.spinning {
-  transition: transform var(--spin-duration) cubic-bezier(0.12, 0.75, 0.08, 1);
 }
 
 .wheel-face {
   position: absolute;
   inset: 0;
   border-radius: 50%;
+  overflow: hidden;
   background: conic-gradient(
     from -15deg,
     #7fd0ea 0deg 30deg,
@@ -204,42 +181,82 @@ body {
 .labels {
   position: absolute;
   inset: 0;
+  z-index: 2;
+  pointer-events: none;
 }
 
 .label {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 3.2rem;
-  height: 3.2rem;
-  margin: -1.6rem 0 0 -1.6rem;
+  width: 3.6rem;
+  height: 3.6rem;
+  margin: -1.8rem 0 0 -1.8rem;
   display: grid;
   place-items: center;
   transform:
     rotate(calc(var(--i) * 30deg))
-    translateY(calc(var(--wheel-size) * -0.32))
+    translateY(calc(var(--wheel-size) * -0.29))
     rotate(calc(var(--i) * -30deg));
   font-family: var(--font-display);
-  font-size: 1.85rem;
+  font-size: clamp(1.9rem, 6.2vw, 2.55rem);
   font-weight: 800;
   color: #141414;
   text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
-  user-select: none;
+}
+
+.label--clock {
+  width: clamp(5.8rem, 18vw, 7.6rem);
+  height: clamp(5.8rem, 18vw, 7.6rem);
+  margin: calc(clamp(5.8rem, 18vw, 7.6rem) / -2) 0 0 calc(clamp(5.8rem, 18vw, 7.6rem) / -2);
+  transform:
+    rotate(calc(var(--i) * 30deg))
+    translateY(calc(var(--wheel-size) * -0.275))
+    rotate(calc(var(--i) * -30deg));
+  z-index: 3;
 }
 
 .label svg {
-  width: 2.55rem;
-  height: 2.55rem;
+  width: 2.7rem;
+  height: 2.7rem;
   display: block;
   filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.18));
+}
+
+.label--clock svg {
+  width: 100%;
+  height: 100%;
+}
+
+.needle {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  transform: rotate(0deg);
+  will-change: transform;
+}
+
+.needle-arm {
+  width: 13%;
+  max-width: 3.1rem;
+  filter: drop-shadow(0 4px 6px var(--shadow));
+}
+
+.needle-svg {
+  display: block;
+  width: 100%;
+  height: auto;
 }
 
 .hub {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 18%;
-  height: 18%;
+  width: 14%;
+  height: 14%;
   transform: translate(-50%, -50%);
   border-radius: 50%;
   background:
@@ -247,26 +264,26 @@ body {
   box-shadow:
     0 2px 0 rgba(255, 255, 255, 0.65) inset,
     0 4px 10px rgba(0, 0, 0, 0.22);
-  z-index: 2;
+  z-index: 5;
+  pointer-events: none;
 }
 
 .controls {
   width: min(100%, 22rem);
   display: grid;
-  gap: 0.85rem;
+  gap: 0.55rem;
   justify-items: center;
   animation: rise-in 0.9s ease-out 0.16s both;
 }
 
 .result {
   margin: 0;
-  min-height: 1.5rem;
-  font-size: 1.15rem;
+  min-height: 1.35rem;
+  font-size: 1.05rem;
   font-weight: 700;
   color: var(--cream);
   text-align: center;
   text-shadow: 0 2px 10px rgba(16, 58, 82, 0.28);
-  transition: transform 0.25s ease, opacity 0.25s ease;
 }
 
 .result.pop {
@@ -276,26 +293,26 @@ body {
 .spin-btn {
   appearance: none;
   border: 0;
-  width: min(100%, 16rem);
-  min-height: 3.5rem;
-  padding: 0.85rem 1.5rem;
+  width: min(100%, 14rem);
+  min-height: 3.15rem;
+  padding: 0.7rem 1.35rem;
   border-radius: 1.15rem;
   background: linear-gradient(180deg, #ffe27a 0%, #f0b429 100%);
   color: #2a2208;
   font-family: var(--font-display);
-  font-size: 1.55rem;
+  font-size: 1.4rem;
   font-weight: 700;
   letter-spacing: 0.04em;
   box-shadow:
     0 2px 0 #fff2b8 inset,
-    0 8px 0 #c78910,
-    0 14px 24px rgba(24, 56, 78, 0.28);
+    0 7px 0 #c78910,
+    0 12px 20px rgba(24, 56, 78, 0.28);
   cursor: pointer;
   transition: transform 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
 }
 
 .spin-btn:active:not(:disabled) {
-  transform: translateY(5px);
+  transform: translateY(4px);
   box-shadow:
     0 2px 0 #fff2b8 inset,
     0 3px 0 #c78910,
@@ -332,9 +349,13 @@ body {
   }
 }
 
-@media (min-height: 740px) {
-  .app {
-    gap: 1.1rem;
+@media (max-height: 700px) {
+  :root {
+    --wheel-size: min(96vw, 68dvh, 560px);
+  }
+
+  .brand-mark {
+    font-size: clamp(1.35rem, 5.5vw, 1.8rem);
   }
 }
 
@@ -346,9 +367,5 @@ body {
   .controls,
   .result.pop {
     animation: none;
-  }
-
-  .wheel.spinning {
-    transition-duration: 0.01ms;
   }
 }

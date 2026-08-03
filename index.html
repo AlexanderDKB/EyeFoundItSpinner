@@ -24,31 +24,43 @@
     <main class="app">
       <header class="brand">
         <p class="brand-mark">Eye Found It</p>
-        <h1 class="headline">Spin to search</h1>
       </header>
 
-      <section class="spinner-stage" aria-label="Game spinner">
-        <div class="pointer" aria-hidden="true">
-          <svg viewBox="0 0 40 56" class="pointer-svg">
-            <path
-              d="M20 4 L34 28 A14 14 0 1 1 6 28 Z"
-              fill="#1a1a1a"
-            />
-            <circle cx="20" cy="30" r="5" fill="#f7f3e8" />
-          </svg>
-        </div>
-
+      <section
+        class="spinner-stage"
+        id="spinnerStage"
+        aria-label="Game spinner. Flick to spin, or use the spin button."
+      >
         <div class="wheel-shell">
-          <div class="wheel" id="wheel" role="img" aria-label="Spinner wheel with twelve segments">
+          <div
+            class="wheel"
+            id="wheel"
+            role="img"
+            aria-label="Spinner wheel with twelve segments"
+          >
             <div class="wheel-face"></div>
             <div class="labels" id="labels"></div>
-            <div class="hub" aria-hidden="true"></div>
           </div>
         </div>
+
+        <div class="needle" id="needle" aria-hidden="true">
+          <div class="needle-arm">
+            <svg class="needle-svg" viewBox="0 0 48 240">
+              <path
+                d="M24 6 L36 70 L30 70 L30 150 L38 150 L24 188 L10 150 L18 150 L18 70 L12 70 Z"
+                fill="#1a1a1a"
+              />
+              <circle cx="24" cy="120" r="11" fill="#f7f3e8" />
+              <circle cx="24" cy="120" r="5" fill="#1a1a1a" />
+            </svg>
+          </div>
+        </div>
+
+        <div class="hub" aria-hidden="true"></div>
       </section>
 
       <section class="controls">
-        <p class="result" id="result" aria-live="polite">Tap spin</p>
+        <p class="result" id="result" aria-live="polite">Flick the needle or tap spin</p>
         <button type="button" class="spin-btn" id="spinBtn">Spin</button>
       </section>
     </main>
