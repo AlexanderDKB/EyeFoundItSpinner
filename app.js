@@ -83,7 +83,6 @@ let reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matche
 let dragPointerId = null;
 let lastDragAngle = 0;
 let dragSamples = [];
-let boostSampling = false;
 
 function buildLabels() {
   const frag = document.createDocumentFragment();
@@ -321,39 +320,30 @@ function onPointerDown(event) {
   stageEl.setPointerCapture(event.pointerId);
   stageEl.classList.add("is-dragging");
 
-  lastDragAngle = pointerAngleFromEvent(event);
-  dragSamples = [{ angle: lastDragAngle, time: performance.now() }];
-
-  if (mode === "coasting") {
-    // Arm keeps spinning; this gesture only adds impulse on release.
-    boostSampling = true;
-    setButtonLabel("Faster…");
-    return;
-  }
-
-  boostSampling = false;
-  mode = "dragging";
+  // Grabbing always stops the arm so you can wiggle it, then flick.
   velocity = 0;
   stopLoop();
+  mode = "dragging";
   setButtonLabel("Flick…");
+
+  lastDragAngle = pointerAngleFromEvent(event);
+  dragSamples = [{ angle: lastDragAngle, time: performance.now() }];
 }
 
 function onPointerMove(event) {
-  if (dragPointerId !== event.pointerId) return;
+  if (dragPointerId !== event.pointerId || mode !== "dragging") return;
 
   const nextAngle = pointerAngleFromEvent(event);
   const now = performance.now();
 
-  if (mode === "dragging" && !boostSampling) {
-    let delta = nextAngle - lastDragAngle;
-    if (delta > 180) delta -= 360;
-    if (delta < -180) delta += 360;
+  let delta = nextAngle - lastDragAngle;
+  if (delta > 180) delta -= 360;
+  if (delta < -180) delta += 360;
 
-    const prev = angle;
-    angle += delta;
-    emitTicks(prev, angle);
-    renderNeedle();
-  }
+  const prev = angle;
+  angle += delta;
+  emitTicks(prev, angle);
+  renderNeedle();
 
   dragSamples.push({ angle: nextAngle, time: now });
   while (dragSamples.length > 6) dragSamples.shift();
@@ -368,8 +358,6 @@ function onPointerUp(event) {
   dragPointerId = null;
 
   const flickSpeed = sampleFlickSpeed();
-  const wasBoost = boostSampling;
-  boostSampling = false;
   dragSamples = [];
 
   if (reducedMotion) {
@@ -381,11 +369,6 @@ function onPointerUp(event) {
     return;
   }
 
-  if (wasBoost) {
-    beginCoast(flickSpeed, { additive: true });
-    return;
-  }
-
   beginCoast(flickSpeed, { additive: false });
 }
 
@@ -394,13 +377,6 @@ function onPointerCancel(event) {
   stageEl.classList.remove("is-dragging");
   dragPointerId = null;
   dragSamples = [];
-  boostSampling = false;
-
-  if (mode === "coasting") {
-    startLoop();
-    return;
-  }
-
   beginCoast(0, { additive: false });
 }
 
