@@ -83,9 +83,6 @@ let audioCtx = null;
 let audioUnlocked = false;
 let reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 let selectedIndex = null;
-let sfx = null;
-let voiceList = [];
-let voiceIndex = 0;
 
 let dragPointerId = null;
 let lastDragAngle = 0;
@@ -195,136 +192,35 @@ function setButtonLabel(text) {
   spinBtn.textContent = text;
 }
 
-function writeString(view, offset, string) {
-  for (let i = 0; i < string.length; i += 1) {
-    view.setUint8(offset + i, string.charCodeAt(i));
-  }
-}
-
-function samplesToWavUrl(samples, sampleRate) {
-  const buffer = new ArrayBuffer(44 + samples.length * 2);
-  const view = new DataView(buffer);
-
-  writeString(view, 0, "RIFF");
-  view.setUint32(4, 36 + samples.length * 2, true);
-  writeString(view, 8, "WAVE");
-  writeString(view, 12, "fmt ");
-  view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true);
-  view.setUint16(22, 1, true);
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * 2, true);
-  view.setUint16(32, 2, true);
-  view.setUint16(34, 16, true);
-  writeString(view, 36, "data");
-  view.setUint32(40, samples.length * 2, true);
-
-  let offset = 44;
-  for (let i = 0; i < samples.length; i += 1) {
-    const clamped = Math.max(-1, Math.min(1, samples[i]));
-    view.setInt16(offset, clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff, true);
-    offset += 2;
-  }
-
-  return URL.createObjectURL(new Blob([buffer], { type: "audio/wav" }));
-}
-
-function makeTickSamples(sampleRate) {
-  const count = Math.floor(sampleRate * 0.04);
-  const samples = new Float32Array(count);
-  for (let i = 0; i < count; i += 1) {
-    const t = i / sampleRate;
-    const env = Math.pow(1 - i / count, 5);
-    samples[i] =
-      (Math.sin(2 * Math.PI * 2600 * t) * 0.7 + (Math.random() * 2 - 1) * 0.35) * env;
-  }
-  return samples;
-}
-
-function makeBellSamples(sampleRate, frequency, duration) {
-  const count = Math.floor(sampleRate * duration);
-  const samples = new Float32Array(count);
-  for (let i = 0; i < count; i += 1) {
-    const t = i / sampleRate;
-    const env = Math.exp((-3.1 * t) / duration);
-    samples[i] =
-      (Math.sin(2 * Math.PI * frequency * t) * 0.62 +
-        Math.sin(2 * Math.PI * frequency * 2.01 * t) * 0.28 +
-        Math.sin(2 * Math.PI * frequency * 3.01 * t) * 0.12) *
-      env;
-  }
-  return samples;
-}
-
-function buildSfx() {
-  if (sfx) return sfx;
-  const sampleRate = 22050;
-  sfx = {
-    tick: new Audio(samplesToWavUrl(makeTickSamples(sampleRate), sampleRate)),
-    ding: new Audio(
-      samplesToWavUrl(makeBellSamples(sampleRate, 587.33, 0.95), sampleRate)
-    ),
-    dong: new Audio(
-      samplesToWavUrl(makeBellSamples(sampleRate, 440.0, 1.25), sampleRate)
-    ),
-  };
-  Object.values(sfx).forEach((audio) => {
-    audio.preload = "auto";
-    audio.setAttribute("playsinline", "true");
-  });
-  return sfx;
-}
-
-function playHtmlSound(template, volume) {
-  const bank = buildSfx();
-  const node = template.cloneNode(true);
-  node.volume = volume;
-  const playPromise = node.play();
-  if (playPromise && typeof playPromise.catch === "function") {
-    playPromise.catch(() => {});
-  }
-}
-
 function ensureAudio() {
   const AC = window.AudioContext || window.webkitAudioContext;
   if (!AC) return null;
   if (!audioCtx) audioCtx = new AC();
+  if (audioCtx.state === "suspended") {
+    audioCtx.resume().catch(() => {});
+  }
   return audioCtx;
 }
 
 function unlockAudio() {
-  const bank = buildSfx();
   const ctx = ensureAudio();
+  if (!ctx) return null;
 
-  if (ctx && ctx.state === "suspended") {
+  if (ctx.state === "suspended") {
     ctx.resume().catch(() => {});
   }
 
-  // iOS: call play() synchronously inside the user gesture.
-  [bank.tick, bank.ding, bank.dong].forEach((audio) => {
-    try {
-      audio.muted = true;
-      audio.currentTime = 0;
-      const playPromise = audio.play();
-      if (playPromise && typeof playPromise.then === "function") {
-        playPromise
-          .then(() => {
-            audio.pause();
-            audio.currentTime = 0;
-            audio.muted = false;
-          })
-          .catch(() => {
-            audio.muted = false;
-          });
-      } else {
-        audio.muted = false;
-      }
-    } catch (_) {
-      audio.muted = false;
-    }
-  });
+  // Warm the context inside the user gesture (helps iOS).
+  if (!audioUnlocked) {
+    const buffer = ctx.createBuffer(1, 1, 22050);
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(ctx.destination);
+    source.start(0);
+    audioUnlocked = true;
+  }
 
-  audioUnlocked = true;
+  return ctx;
 }
 
 function stopSpeech() {
@@ -333,100 +229,64 @@ function stopSpeech() {
   }
 }
 
-function playTick() {
-  playHtmlSound(buildSfx().tick, 0.72);
-
-  // Backup Web Audio click if HTML audio is blocked.
+function playTick(atTime) {
   const ctx = ensureAudio();
-  if (!ctx || ctx.state !== "running") return;
-  const t = ctx.currentTime;
+  if (!ctx) return;
+
+  const t = atTime == null ? ctx.currentTime : Math.max(atTime, ctx.currentTime);
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
+
   osc.type = "square";
-  osc.frequency.setValueAtTime(2100, t);
-  gain.gain.setValueAtTime(0.18, t);
-  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.03);
+  osc.frequency.setValueAtTime(2400, t);
+  osc.frequency.exponentialRampToValueAtTime(900, t + 0.02);
+
+  gain.gain.setValueAtTime(0.0001, t);
+  gain.gain.exponentialRampToValueAtTime(0.28, t + 0.002);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.03);
+
   osc.connect(gain);
   gain.connect(ctx.destination);
   osc.start(t);
   osc.stop(t + 0.035);
 }
 
-function playDingDong() {
-  const bank = buildSfx();
-  playHtmlSound(bank.ding, 0.95);
-  window.setTimeout(() => playHtmlSound(bank.dong, 0.95), 420);
-
+function playBellTone(frequency, startOffset, duration) {
   const ctx = ensureAudio();
-  if (!ctx || ctx.state !== "running") return;
-  const ring = (freq, delay, dur) => {
-    const t = ctx.currentTime + delay;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = "sine";
-    osc.frequency.setValueAtTime(freq, t);
-    gain.gain.setValueAtTime(0.001, t);
-    gain.gain.exponentialRampToValueAtTime(0.5, t + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start(t);
-    osc.stop(t + dur + 0.05);
-  };
-  ring(587.33, 0, 0.9);
-  ring(440.0, 0.42, 1.2);
+  if (!ctx) return;
+
+  const t = ctx.currentTime + startOffset;
+  const osc = ctx.createOscillator();
+  const partial = ctx.createOscillator();
+  const gain = ctx.createGain();
+
+  osc.type = "sine";
+  partial.type = "sine";
+  osc.frequency.setValueAtTime(frequency, t);
+  partial.frequency.setValueAtTime(frequency * 2.01, t);
+
+  gain.gain.setValueAtTime(0.0001, t);
+  gain.gain.exponentialRampToValueAtTime(0.45, t + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t + duration);
+
+  osc.connect(gain);
+  partial.connect(gain);
+  gain.connect(ctx.destination);
+
+  osc.start(t);
+  partial.start(t);
+  osc.stop(t + duration + 0.05);
+  partial.stop(t + duration + 0.05);
 }
 
-function refreshVoices() {
-  if (!window.speechSynthesis) return;
-  voiceList = window.speechSynthesis.getVoices().filter((voice) => voice.lang.startsWith("en"));
-  if (!voiceList.length) {
-    voiceList = window.speechSynthesis.getVoices();
-  }
-
-  const saved = window.localStorage.getItem("efi-voice-uri");
-  if (saved) {
-    const found = voiceList.findIndex((voice) => voice.voiceURI === saved);
-    if (found >= 0) voiceIndex = found;
-  }
-  updateVoiceButton();
-}
-
-function currentVoice() {
-  if (!voiceList.length) return null;
-  return voiceList[voiceIndex % voiceList.length];
-}
-
-function updateVoiceButton() {
-  const btn = document.getElementById("voiceBtn");
-  if (!btn) return;
-  const voice = currentVoice();
-  btn.textContent = voice ? `Voice: ${voice.name}` : "Voice: Default";
-}
-
-function cycleVoice() {
+function playDingDong() {
   unlockAudio();
-  if (!voiceList.length) refreshVoices();
-  if (!voiceList.length) return;
-
-  voiceIndex = (voiceIndex + 1) % voiceList.length;
-  const voice = currentVoice();
-  if (voice) {
-    window.localStorage.setItem("efi-voice-uri", voice.voiceURI);
-  }
-  updateVoiceButton();
-
-  // Preview the selected voice.
-  stopSpeech();
-  if (!window.SpeechSynthesisUtterance) return;
-  const preview = new SpeechSynthesisUtterance("Eye Find It");
-  preview.rate = 1;
-  preview.pitch = 1.1;
-  if (voice) preview.voice = voice;
-  window.speechSynthesis.speak(preview);
+  playBellTone(587.33, 0, 0.85);
+  playBellTone(440.0, 0.42, 1.15);
 }
 
 function playMickeyFound() {
+  unlockAudio();
   stopSpeech();
 
   if (!window.speechSynthesis || !window.SpeechSynthesisUtterance) {
@@ -434,21 +294,16 @@ function playMickeyFound() {
     return;
   }
 
-  refreshVoices();
-  const voice = currentVoice();
-
   const line = new SpeechSynthesisUtterance("Eye Find It");
   line.rate = 1;
   line.pitch = 1.2;
   line.volume = 1;
-  if (voice) line.voice = voice;
 
   line.onend = () => {
     const moo = new SpeechSynthesisUtterance("mooooooooooooo");
     moo.rate = 0.28;
     moo.pitch = 0.35;
     moo.volume = 1;
-    if (voice) moo.voice = voice;
     window.speechSynthesis.speak(moo);
   };
 
@@ -467,7 +322,6 @@ function playLandSound(segment) {
 }
 
 function boundaryIndex(deg) {
-  // Boundaries sit between segment centers (every 30°, offset by 15°).
   return Math.floor((deg + SEGMENT_DEG / 2) / SEGMENT_DEG);
 }
 
@@ -477,9 +331,13 @@ function emitTicks(fromAngle, toAngle) {
   const steps = Math.abs(toBound - fromBound);
   if (steps === 0) return;
 
-  const clicks = Math.min(steps, 10);
+  const ctx = ensureAudio();
+  if (!ctx) return;
+
+  const clicks = Math.min(steps, 14);
+  const now = ctx.currentTime;
   for (let i = 0; i < clicks; i += 1) {
-    window.setTimeout(() => playTick(), i * 18);
+    playTick(now + i * 0.016);
   }
   lastTickSlot = slotIndex(toAngle);
 }
