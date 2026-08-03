@@ -80,6 +80,7 @@ let rafId = 0;
 let lastTs = 0;
 let lastTickSlot = 0;
 let audioCtx = null;
+let audioUnlocked = false;
 let reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 let selectedIndex = null;
 
@@ -170,6 +171,7 @@ function announce(segment) {
   void resultEl.offsetWidth;
   resultEl.classList.add("pop");
   setButtonLabel("Spin");
+  playLandSound(segment);
 }
 
 function setButtonLabel(text) {
@@ -200,43 +202,152 @@ function ensureAudio() {
   return audioCtx;
 }
 
-function playTick() {
+function unlockAudio() {
+  const ctx = ensureAudio();
+  if (!ctx || audioUnlocked) return ctx;
+
+  // iOS requires a silent buffer start inside a user gesture.
+  const buffer = ctx.createBuffer(1, 1, 22050);
+  const source = ctx.createBufferSource();
+  source.buffer = buffer;
+  source.connect(ctx.destination);
+  source.start(0);
+  audioUnlocked = true;
+  return ctx;
+}
+
+function stopSpeech() {
+  if (window.speechSynthesis) {
+    window.speechSynthesis.cancel();
+  }
+}
+
+function playTick(atTime) {
   const ctx = ensureAudio();
   if (!ctx) return;
 
-  const now = ctx.currentTime;
-  const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
+  const t = atTime == null ? ctx.currentTime : atTime;
+  const duration = 0.028;
+  const frameCount = Math.max(1, Math.floor(ctx.sampleRate * duration));
+  const buffer = ctx.createBuffer(1, frameCount, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+
+  for (let i = 0; i < frameCount; i += 1) {
+    const env = Math.pow(1 - i / frameCount, 3);
+    data[i] = (Math.random() * 2 - 1) * env;
+  }
+
+  const source = ctx.createBufferSource();
+  source.buffer = buffer;
+
   const filter = ctx.createBiquadFilter();
+  filter.type = "bandpass";
+  filter.frequency.value = 3200;
+  filter.Q.value = 6;
 
-  osc.type = "triangle";
-  osc.frequency.setValueAtTime(1550, now);
-  osc.frequency.exponentialRampToValueAtTime(420, now + 0.045);
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(0.0001, t);
+  gain.gain.exponentialRampToValueAtTime(0.55, t + 0.002);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t + duration);
 
-  filter.type = "highpass";
-  filter.frequency.value = 650;
-
-  gain.gain.setValueAtTime(0.0001, now);
-  gain.gain.exponentialRampToValueAtTime(0.22, now + 0.004);
-  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.05);
-
-  osc.connect(filter);
+  source.connect(filter);
   filter.connect(gain);
   gain.connect(ctx.destination);
+  source.start(t);
+  source.stop(t + duration + 0.01);
+}
 
-  osc.start(now);
-  osc.stop(now + 0.06);
+function playBellTone(frequency, startOffset, duration) {
+  const ctx = ensureAudio();
+  if (!ctx) return;
+
+  const t = ctx.currentTime + startOffset;
+  const osc = ctx.createOscillator();
+  const partial = ctx.createOscillator();
+  const gain = ctx.createGain();
+
+  osc.type = "sine";
+  partial.type = "sine";
+  osc.frequency.setValueAtTime(frequency, t);
+  partial.frequency.setValueAtTime(frequency * 2.01, t);
+
+  gain.gain.setValueAtTime(0.0001, t);
+  gain.gain.exponentialRampToValueAtTime(0.42, t + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t + duration);
+
+  osc.connect(gain);
+  partial.connect(gain);
+  gain.connect(ctx.destination);
+
+  osc.start(t);
+  partial.start(t);
+  osc.stop(t + duration + 0.05);
+  partial.stop(t + duration + 0.05);
+}
+
+function playDingDong() {
+  unlockAudio();
+  // Big clock-tower ding… dong
+  playBellTone(587.33, 0, 0.85); // D5
+  playBellTone(440.0, 0.42, 1.15); // A4
+}
+
+function playMickeyFound() {
+  unlockAudio();
+  stopSpeech();
+
+  if (!window.speechSynthesis || !window.SpeechSynthesisUtterance) {
+    // Fallback if speech isn't available.
+    playBellTone(660, 0, 0.2);
+    playBellTone(520, 0.35, 0.9);
+    return;
+  }
+
+  const found = new SpeechSynthesisUtterance("I found it");
+  found.rate = 1.05;
+  found.pitch = 1.35;
+  found.volume = 1;
+
+  found.onend = () => {
+    const moo = new SpeechSynthesisUtterance("mooooooo");
+    moo.rate = 0.45;
+    moo.pitch = 0.45;
+    moo.volume = 1;
+    window.speechSynthesis.speak(moo);
+  };
+
+  window.speechSynthesis.speak(found);
+}
+
+function playLandSound(segment) {
+  if (segment.type === "clock") {
+    stopSpeech();
+    playDingDong();
+    return;
+  }
+  if (segment.type === "mickey") {
+    playMickeyFound();
+  }
+}
+
+function boundaryIndex(deg) {
+  // Boundaries sit between segment centers (every 30°, offset by 15°).
+  return Math.floor((deg + SEGMENT_DEG / 2) / SEGMENT_DEG);
 }
 
 function emitTicks(fromAngle, toAngle) {
-  const fromSlot = Math.floor(fromAngle / SEGMENT_DEG);
-  const toSlot = Math.floor(toAngle / SEGMENT_DEG);
-  const steps = Math.abs(toSlot - fromSlot);
+  const fromBound = boundaryIndex(fromAngle);
+  const toBound = boundaryIndex(toAngle);
+  const steps = Math.abs(toBound - fromBound);
   if (steps === 0) return;
 
-  const clicks = Math.min(steps, 8);
+  const ctx = ensureAudio();
+  if (!ctx) return;
+
+  const clicks = Math.min(steps, 14);
+  const now = ctx.currentTime;
   for (let i = 0; i < clicks; i += 1) {
-    playTick();
+    playTick(now + i * 0.016);
   }
   lastTickSlot = slotIndex(toAngle);
 }
@@ -302,6 +413,8 @@ function beginCoast(speed, { additive = false } = {}) {
     velocity = Math.sign(velocity || SPIN_DIRECTION) * MIN_FLICK_SPEED;
   }
 
+  stopSpeech();
+  unlockAudio();
   clearSelection();
   mode = "coasting";
   setButtonLabel("Spinning…");
@@ -309,7 +422,8 @@ function beginCoast(speed, { additive = false } = {}) {
 }
 
 function buttonSpin() {
-  ensureAudio();
+  unlockAudio();
+  stopSpeech();
 
   if (reducedMotion) {
     const index = pickIndex();
@@ -366,7 +480,8 @@ function onPointerDown(event) {
   if (event.pointerType === "mouse" && event.button !== 0) return;
   if (dragPointerId !== null) return;
 
-  ensureAudio();
+  unlockAudio();
+  stopSpeech();
   dragPointerId = event.pointerId;
   stageEl.setPointerCapture(event.pointerId);
   stageEl.classList.add("is-dragging");
@@ -438,7 +553,7 @@ renderNeedle();
 lastTickSlot = slotIndex(angle);
 
 spinBtn.addEventListener("click", () => {
-  ensureAudio();
+  unlockAudio();
   buttonSpin();
 });
 
