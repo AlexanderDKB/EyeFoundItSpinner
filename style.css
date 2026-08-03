@@ -240,8 +240,8 @@ body {
 }
 
 .needle-arm {
-  width: 13%;
-  max-width: 3.1rem;
+  width: 11.5%;
+  max-width: 3rem;
   filter: drop-shadow(0 4px 6px var(--shadow));
 }
 

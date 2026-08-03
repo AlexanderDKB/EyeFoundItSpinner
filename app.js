@@ -14,10 +14,13 @@ const SEGMENTS = [
 ];
 
 const SEGMENT_DEG = 30;
-const FRICTION = 2.35; // velocity decay per second (exponential base feel)
-const STOP_SPEED = 18; // deg/s
-const MIN_FLICK_SPEED = 140; // deg/s
-const MAX_SPEED = 2600;
+const SPIN_DIRECTION = 1; // clockwise
+const FRICTION = 0.72; // lower = longer coast
+const STOP_SPEED = 10; // deg/s
+const MIN_FLICK_SPEED = 200; // deg/s
+const MAX_SPEED = 4800;
+const BUTTON_SPEED_MIN = 2100;
+const BUTTON_SPEED_SPAN = 1400;
 
 const CLOCK_SVG = (value) => `
   <svg viewBox="0 0 96 96" aria-hidden="true">
@@ -60,14 +63,14 @@ let velocity = 0;
 let mode = "idle"; // idle | dragging | coasting
 let rafId = 0;
 let lastTs = 0;
-let lastTickSlot = slotIndex(0);
+let lastTickSlot = 0;
 let audioCtx = null;
 let reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 let dragPointerId = null;
 let lastDragAngle = 0;
-let lastDragTime = 0;
 let dragSamples = [];
+let boostSampling = false;
 
 function buildLabels() {
   const frag = document.createDocumentFragment();
@@ -97,7 +100,6 @@ function normalize(deg) {
 }
 
 function slotIndex(deg) {
-  // Boundary crossings every 30°, offset so ticks happen at segment edges.
   return Math.floor(normalize(deg) / SEGMENT_DEG);
 }
 
@@ -107,6 +109,10 @@ function segmentAt(deg) {
 
 function nearestCenter(deg) {
   return Math.round(deg / SEGMENT_DEG) * SEGMENT_DEG;
+}
+
+function clampSpeed(speed) {
+  return Math.max(-MAX_SPEED, Math.min(MAX_SPEED, speed));
 }
 
 function renderNeedle() {
@@ -164,16 +170,11 @@ function emitTicks(fromAngle, toAngle) {
   const steps = Math.abs(toSlot - fromSlot);
   if (steps === 0) return;
 
-  const maxClicks = 8;
-  const clicks = Math.min(steps, maxClicks);
+  const clicks = Math.min(steps, 8);
   for (let i = 0; i < clicks; i += 1) {
     playTick();
   }
   lastTickSlot = slotIndex(toAngle);
-}
-
-function setBusy(isBusy) {
-  spinBtn.disabled = isBusy;
 }
 
 function finishSpin() {
@@ -182,7 +183,6 @@ function finishSpin() {
   mode = "idle";
   lastTickSlot = slotIndex(angle);
   renderNeedle();
-  setBusy(false);
   announce(SEGMENTS[segmentAt(angle)]);
   if (navigator.vibrate) navigator.vibrate(16);
 }
@@ -205,8 +205,7 @@ function tick(ts) {
 
   if (mode === "coasting") {
     const prev = angle;
-    const decay = Math.exp(-FRICTION * dt);
-    velocity *= decay;
+    velocity *= Math.exp(-FRICTION * dt);
     angle += velocity * dt;
     emitTicks(prev, angle);
     renderNeedle();
@@ -221,32 +220,29 @@ function tick(ts) {
   rafId = requestAnimationFrame(tick);
 }
 
-function beginCoast(speed) {
-  velocity = Math.max(-MAX_SPEED, Math.min(MAX_SPEED, speed));
+function beginCoast(speed, { additive = false } = {}) {
+  const next = additive ? velocity + speed : speed;
+  velocity = clampSpeed(next);
 
-  if (Math.abs(velocity) < 40) {
+  if (Math.abs(velocity) < 45) {
     angle = nearestCenter(angle);
     renderNeedle();
     mode = "idle";
-    setBusy(false);
     announce(SEGMENTS[segmentAt(angle)]);
     return;
   }
 
-  // Light flicks still get a little boost so the needle doesn't die immediately.
   if (Math.abs(velocity) < MIN_FLICK_SPEED) {
-    velocity = Math.sign(velocity || 1) * MIN_FLICK_SPEED;
+    velocity = Math.sign(velocity || SPIN_DIRECTION) * MIN_FLICK_SPEED;
   }
 
   mode = "coasting";
-  setBusy(true);
   resultEl.textContent = "Spinning…";
   resultEl.classList.remove("pop");
   startLoop();
 }
 
 function buttonSpin() {
-  if (mode !== "idle") return;
   ensureAudio();
 
   if (reducedMotion) {
@@ -257,9 +253,10 @@ function buttonSpin() {
     return;
   }
 
-  const direction = Math.random() > 0.5 ? 1 : -1;
-  const speed = (980 + Math.random() * 900) * direction;
-  beginCoast(speed);
+  const speed =
+    (BUTTON_SPEED_MIN + Math.random() * BUTTON_SPEED_SPAN) * SPIN_DIRECTION;
+  // Button always boosts the same direction; stacks if already spinning.
+  beginCoast(speed, { additive: mode === "coasting" });
 }
 
 function pickIndex() {
@@ -281,46 +278,69 @@ function pointerAngleFromEvent(event) {
   return (Math.atan2(dx, -dy) * 180) / Math.PI;
 }
 
+function sampleFlickSpeed() {
+  if (dragSamples.length < 2) return 0;
+
+  let travel = 0;
+  for (let i = 1; i < dragSamples.length; i += 1) {
+    let step = dragSamples[i].angle - dragSamples[i - 1].angle;
+    if (step > 180) step -= 360;
+    if (step < -180) step += 360;
+    travel += step;
+  }
+
+  const travelDt =
+    (dragSamples[dragSamples.length - 1].time - dragSamples[0].time) / 1000;
+  return travelDt > 0 ? travel / travelDt : 0;
+}
+
 function onPointerDown(event) {
   if (event.pointerType === "mouse" && event.button !== 0) return;
-  if (mode === "coasting") return;
+  if (dragPointerId !== null) return;
 
   ensureAudio();
   dragPointerId = event.pointerId;
   stageEl.setPointerCapture(event.pointerId);
   stageEl.classList.add("is-dragging");
 
-  mode = "dragging";
-  setBusy(true);
-  resultEl.textContent = "Flick…";
-  resultEl.classList.remove("pop");
-
   lastDragAngle = pointerAngleFromEvent(event);
-  lastDragTime = performance.now();
-  dragSamples = [{ angle: lastDragAngle, time: lastDragTime }];
+  dragSamples = [{ angle: lastDragAngle, time: performance.now() }];
+
+  if (mode === "coasting") {
+    // Arm keeps spinning; this gesture only adds impulse on release.
+    boostSampling = true;
+    resultEl.textContent = "Faster…";
+    return;
+  }
+
+  boostSampling = false;
+  mode = "dragging";
   velocity = 0;
   stopLoop();
+  resultEl.textContent = "Flick…";
+  resultEl.classList.remove("pop");
 }
 
 function onPointerMove(event) {
-  if (dragPointerId !== event.pointerId || mode !== "dragging") return;
+  if (dragPointerId !== event.pointerId) return;
 
   const nextAngle = pointerAngleFromEvent(event);
-  let delta = nextAngle - lastDragAngle;
-  if (delta > 180) delta -= 360;
-  if (delta < -180) delta += 360;
-
-  const prev = angle;
-  angle += delta;
-  emitTicks(prev, angle);
-  renderNeedle();
-
   const now = performance.now();
+
+  if (mode === "dragging" && !boostSampling) {
+    let delta = nextAngle - lastDragAngle;
+    if (delta > 180) delta -= 360;
+    if (delta < -180) delta += 360;
+
+    const prev = angle;
+    angle += delta;
+    emitTicks(prev, angle);
+    renderNeedle();
+  }
+
   dragSamples.push({ angle: nextAngle, time: now });
   while (dragSamples.length > 6) dragSamples.shift();
-
   lastDragAngle = nextAngle;
-  lastDragTime = now;
 }
 
 function onPointerUp(event) {
@@ -330,41 +350,26 @@ function onPointerUp(event) {
   stageEl.classList.remove("is-dragging");
   dragPointerId = null;
 
-  let flickSpeed = 0;
-  if (dragSamples.length >= 2) {
-    const first = dragSamples[0];
-    const last = dragSamples[dragSamples.length - 1];
-    const dt = (last.time - first.time) / 1000;
-    if (dt > 0.001) {
-      let delta = last.angle - first.angle;
-      if (delta > 180) delta -= 360;
-      if (delta < -180) delta += 360;
-      // Use unwrapped needle motion from recent samples for a truer flick.
-      let travel = 0;
-      for (let i = 1; i < dragSamples.length; i += 1) {
-        let step = dragSamples[i].angle - dragSamples[i - 1].angle;
-        if (step > 180) step -= 360;
-        if (step < -180) step += 360;
-        travel += step;
-      }
-      const travelDt =
-        (dragSamples[dragSamples.length - 1].time - dragSamples[0].time) / 1000;
-      flickSpeed = travelDt > 0 ? travel / travelDt : 0;
-    }
-  }
-
+  const flickSpeed = sampleFlickSpeed();
+  const wasBoost = boostSampling;
+  boostSampling = false;
   dragSamples = [];
 
   if (reducedMotion) {
     angle = nearestCenter(angle);
     renderNeedle();
     mode = "idle";
-    setBusy(false);
+    velocity = 0;
     announce(SEGMENTS[segmentAt(angle)]);
     return;
   }
 
-  beginCoast(flickSpeed);
+  if (wasBoost) {
+    beginCoast(flickSpeed, { additive: true });
+    return;
+  }
+
+  beginCoast(flickSpeed, { additive: false });
 }
 
 function onPointerCancel(event) {
@@ -372,11 +377,19 @@ function onPointerCancel(event) {
   stageEl.classList.remove("is-dragging");
   dragPointerId = null;
   dragSamples = [];
-  beginCoast(velocity);
+  boostSampling = false;
+
+  if (mode === "coasting") {
+    startLoop();
+    return;
+  }
+
+  beginCoast(0, { additive: false });
 }
 
 buildLabels();
 renderNeedle();
+lastTickSlot = slotIndex(angle);
 
 spinBtn.addEventListener("click", () => {
   ensureAudio();
